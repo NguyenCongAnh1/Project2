@@ -1,14 +1,12 @@
 package com.udacity.webcrawler;
-
+import com.udacity.webcrawler.json.CrawlResult;
+import javax.inject.Inject;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.RecursiveAction;
-
-import com.google.inject.Inject;
-import com.udacity.webcrawler.json.CrawlResult;
+import java.util.concurrent.RecursiveAction;;
 import com.udacity.webcrawler.parser.PageParser;
 import com.udacity.webcrawler.parser.PageParserFactory;
 /**
@@ -21,7 +19,6 @@ final class ParallelWebCrawler implements WebCrawler {
   private final int popularWordCount;
   private final ForkJoinPool pool;
   private final PageParserFactory parserFactory;
-
   @Inject
   ParallelWebCrawler(
           Clock clock,
@@ -35,7 +32,6 @@ final class ParallelWebCrawler implements WebCrawler {
     this.popularWordCount = popularWordCount;
     this.pool = new ForkJoinPool(Math.min(threadCount, getMaxParallelism()));
   }
-
   @Override
   public CrawlResult crawl(List<String> startingUrls) {
     Instant deadline = clock.instant().plus(timeout);
@@ -55,23 +51,20 @@ final class ParallelWebCrawler implements WebCrawler {
             .setUrlsVisited(visitedUrls.size())
             .build();
   }
-
   private class CrawParallel extends RecursiveAction {
     final String url;
     Instant deadline;
     int threadCount;
     Map<String, Integer> counts;
     Set<String> visitedUrls;
-
-    CrawParallel(String url, Instant deadline, Map<String, Integer> counts, Set<String> visitedUrls) {
+    CrawParallel(String url, Instant deadline, Map<String, Integer> counts, Set<String> visitedUrls){
       this.url = url;
       this.deadline = deadline;
       this.counts = counts;
       this.visitedUrls = visitedUrls;
     }
-
     @Override
-    protected void compute() {
+    protected void compute(){
       if (threadCount == 0 || clock.instant().isAfter(deadline)) {
         return;
       }
@@ -88,11 +81,8 @@ final class ParallelWebCrawler implements WebCrawler {
         }
       }
       for (String link : result.getLinks()) {
-        invokeAll(new CrawParallel(link, deadline, counts, visitedUrls));
-      }
-    }
-  }
-
+        invokeAll(new CrawParallel(link, deadline, counts,visitedUrls));
+      }}}
   @Override
   public int getMaxParallelism() {
     return Runtime.getRuntime().availableProcessors();

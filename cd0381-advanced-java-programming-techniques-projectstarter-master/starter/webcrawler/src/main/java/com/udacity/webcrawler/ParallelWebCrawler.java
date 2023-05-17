@@ -6,7 +6,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.RecursiveAction;;
+import java.util.concurrent.RecursiveAction;
+import java.util.regex.Pattern;
 import com.udacity.webcrawler.parser.PageParser;
 import com.udacity.webcrawler.parser.PageParserFactory;
 /**
@@ -18,16 +19,23 @@ final class ParallelWebCrawler implements WebCrawler {
   private final Duration timeout;
   private final int popularWordCount;
   private final ForkJoinPool pool;
+  private final int maxDepth;
   private final PageParserFactory parserFactory;
+  private final List<Pattern> ignoredUrls;
   @Inject
   ParallelWebCrawler(
           Clock clock,
           PageParserFactory parserFactory,
           @Timeout Duration timeout,
           @PopularWordCount int popularWordCount,
-          @TargetParallelism int threadCount) {
+          @TargetParallelism int threadCount,
+          @IgnoredUrls List<Pattern> ignoredUrls,
+          @MaxDepth int maxDepth
+  ) {
     this.clock = clock;
+    this.ignoredUrls = ignoredUrls;
     this.timeout = timeout;
+    this.maxDepth = maxDepth;
     this.parserFactory = parserFactory;
     this.popularWordCount = popularWordCount;
     this.pool = new ForkJoinPool(Math.min(threadCount, getMaxParallelism()));
@@ -38,7 +46,7 @@ final class ParallelWebCrawler implements WebCrawler {
     Map<String, Integer> counts = Collections.synchronizedMap(new HashMap<>());
     Set<String> visitedUrls = Collections.synchronizedSet(new HashSet<>());
     for (String url : startingUrls) {
-      pool.invoke(new CrawParallel(url, deadline, counts, visitedUrls));
+      pool.invoke(new CrawParallel(url, deadline, counts, visitedUrls, maxDepth));
     }
     if (counts.isEmpty()) {
       return new CrawlResult.Builder()
@@ -54,19 +62,25 @@ final class ParallelWebCrawler implements WebCrawler {
   private class CrawParallel extends RecursiveAction {
     final String url;
     Instant deadline;
-    int threadCount;
+    int maxDepth;
     Map<String, Integer> counts;
     Set<String> visitedUrls;
-    CrawParallel(String url, Instant deadline, Map<String, Integer> counts, Set<String> visitedUrls){
+    CrawParallel(String url, Instant deadline, Map<String, Integer> counts, Set<String> visitedUrls, int maxDepth){
       this.url = url;
       this.deadline = deadline;
       this.counts = counts;
       this.visitedUrls = visitedUrls;
+      this.maxDepth = maxDepth;
     }
     @Override
     protected void compute(){
-      if (threadCount == 0 || clock.instant().isAfter(deadline)) {
+      if (maxDepth == 0 || clock.instant().isAfter(deadline)) {
         return;
+      }
+      for (Pattern pattern : ignoredUrls) {
+        if (pattern.matcher(url).matches()) {
+          return;
+        }
       }
       if (visitedUrls.contains(url)) {
         return;
@@ -81,7 +95,7 @@ final class ParallelWebCrawler implements WebCrawler {
         }
       }
       for (String link : result.getLinks()) {
-        invokeAll(new CrawParallel(link, deadline, counts,visitedUrls));
+        invokeAll(new CrawParallel(link, deadline, counts,visitedUrls, maxDepth -1));
       }}}
   @Override
   public int getMaxParallelism() {

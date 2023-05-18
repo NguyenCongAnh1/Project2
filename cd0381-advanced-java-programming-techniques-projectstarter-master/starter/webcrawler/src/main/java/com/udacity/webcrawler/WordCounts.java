@@ -42,8 +42,9 @@ final class WordCounts {
 
 
     return wordCounts.entrySet().stream()
+            .sorted((new WordCountComparator()).reversed())
+            .skip(Math.max(popularWordCount, wordCounts.size())-Math.min(popularWordCount, wordCounts.size()))
             .sorted(new WordCountComparator())
-            .limit(popularWordCount > wordCounts.size() ? wordCounts.size() : popularWordCount)
             .collect(Collectors.toMap(key -> key.getKey(), value -> value.getValue(),
                     (k, v) -> v, LinkedHashMap::new));
 

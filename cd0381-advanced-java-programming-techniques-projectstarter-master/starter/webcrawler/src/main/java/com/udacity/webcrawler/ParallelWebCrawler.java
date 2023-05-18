@@ -5,11 +5,13 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.RecursiveAction;
+import java.util.concurrent.ForkJoinPool;;
+import java.util.concurrent.RecursiveTask;
 import java.util.regex.Pattern;
 import com.udacity.webcrawler.parser.PageParser;
 import com.udacity.webcrawler.parser.PageParserFactory;
+import java.util.concurrent.ConcurrentMap;
+
 /**
  * A concrete implementation of {@link WebCrawler} that runs multiple threads on a
  * {@link ForkJoinPool} to fetch and process multiple web pages in parallel.
@@ -59,7 +61,7 @@ final class ParallelWebCrawler implements WebCrawler {
             .setUrlsVisited(visitedUrls.size())
             .build();
   }
-  private class CrawParallel extends RecursiveAction {
+  private class CrawParallel extends RecursiveTask {
     final String url;
     Instant deadline;
     int maxDepth;
@@ -73,30 +75,32 @@ final class ParallelWebCrawler implements WebCrawler {
       this.maxDepth = maxDepth;
     }
     @Override
-    protected void compute(){
+    protected Set<String> compute(){
       if (maxDepth == 0 || clock.instant().isAfter(deadline)) {
-        return;
+        return new HashSet<String>();
       }
       for (Pattern pattern : ignoredUrls) {
         if (pattern.matcher(url).matches()) {
-          return;
+          return new HashSet<String>();
         }
       }
       if (visitedUrls.contains(url)) {
-        return;
+        return new HashSet<String>();
       }
       visitedUrls.add(url);
       PageParser.Result result = parserFactory.get(url).parse();
-      for (Map.Entry<String, Integer> e : result.getWordCounts().entrySet()) {
-        if (counts.containsKey(e.getKey())) {
-          counts.put(e.getKey(), e.getValue() + counts.get(e.getKey()));
-        } else {
-          counts.put(e.getKey(), e.getValue());
-        }
+      for (ConcurrentMap.Entry<String, Integer> a : result.getWordCounts().entrySet()) {
+        counts.compute(a.getKey(), (k, v) -> (v == null) ? a.getValue() : a.getValue() + v);
       }
-      for (String link : result.getLinks()) {
-        invokeAll(new CrawParallel(link, deadline, counts,visitedUrls, maxDepth -1));
-      }}}
+      List<CrawParallel> tasks = new ArrayList<>();
+      for (String links : result.getLinks()) {
+        tasks.add(new CrawParallel(links, deadline, counts,visitedUrls,maxDepth - 1));
+      }
+      invokeAll(tasks);
+      return visitedUrls;
+    }
+
+  }
   @Override
   public int getMaxParallelism() {
     return Runtime.getRuntime().availableProcessors();

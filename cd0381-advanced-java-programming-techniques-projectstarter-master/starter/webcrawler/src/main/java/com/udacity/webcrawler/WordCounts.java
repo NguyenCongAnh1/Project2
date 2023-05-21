@@ -39,16 +39,14 @@ final class WordCounts {
 //      topCounts.put(entry.getKey(), entry.getValue());
 //    }
 //    return topCounts;
-
-
     return wordCounts.entrySet().stream()
             .sorted((new WordCountComparator()).reversed())
-            .skip(Math.max(popularWordCount, wordCounts.size())-Math.min(popularWordCount, wordCounts.size()))
+            .skip(Math.max(0, wordCounts.size() - popularWordCount))
             .sorted(new WordCountComparator())
-            .collect(Collectors.toMap(key -> key.getKey(), value -> value.getValue(),
-                    (k, v) -> v, LinkedHashMap::new));
-
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+                    (oldValue, newValue) -> oldValue, LinkedHashMap::new));
   }
+
 
   /**
    * A {@link Comparator} that sorts word count pairs correctly:
